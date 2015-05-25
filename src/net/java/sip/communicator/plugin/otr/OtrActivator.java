@@ -8,15 +8,13 @@ package net.java.sip.communicator.plugin.otr;
 
 import java.util.*;
 
-import net.java.sip.communicator.plugin.otr.authdialog.*;
 import net.java.sip.communicator.service.contactlist.*;
 import net.java.sip.communicator.service.gui.*;
-import net.java.sip.communicator.service.msghistory.*;
 import net.java.sip.communicator.service.protocol.*;
 import net.java.sip.communicator.service.resources.*;
 import net.java.sip.communicator.util.*;
-import net.java.sip.communicator.util.Logger;
 
+import net.java.sip.communicator.util.Logger;
 import org.jitsi.service.configuration.*;
 import org.jitsi.service.resources.*;
 import org.jitsi.util.*;
@@ -30,6 +28,12 @@ public class OtrActivator
     extends AbstractServiceDependentActivator
     implements ServiceListener
 {
+    /**
+     * A property specifying whether private messaging should be automatically
+     * initiated.
+     */
+    public static final String AUTO_INIT_OTR_PROP =
+        "net.java.sip.communicator.plugin.otr.AUTO_INIT_PRIVATE_MESSAGING";
 
     /**
      * The {@link BundleContext} of the {@link OtrActivator}.
@@ -96,11 +100,6 @@ public class OtrActivator
      * The <tt>MetaContactListService</tt> reference.
      */
     private static MetaContactListService metaCListService;
-    
-    /**
-     * The message history service.
-     */
-    private static MessageHistoryService messageHistoryService;
 
     /**
      * Gets an {@link AccountID} by its UID.
@@ -308,7 +307,6 @@ public class OtrActivator
         // Register Transformation Layer
         bundleContext.addServiceListener(this);
         bundleContext.addServiceListener((ServiceListener) scOtrEngine);
-        bundleContext.addServiceListener(new OtrContactManager());
 
         ServiceReference[] protocolProviderRefs
             = ServiceUtils.getServiceReferences(
@@ -372,20 +370,6 @@ public class OtrActivator
             bundleContext.registerService(
                 OtrActionHandler.class.getName(),
                 new SwingOtrActionHandler(), null);
-
-        containerFilter.put(Container.CONTAINER_ID,
-                            Container.CONTAINER_CHAT_WRITE_PANEL.getID());
-        bundleContext.registerService(
-            PluginComponentFactory.class.getName(),
-            new PluginComponentFactory( Container.CONTAINER_CHAT_WRITE_PANEL)
-            {
-                protected PluginComponent getPluginInstance()
-                {
-                    return new OTRv3OutgoingSessionSwitcher(
-                        getContainer(), this);
-                }
-            },
-            containerFilter);
         }
 
         // If the general configuration form is disabled don't register it.
@@ -400,8 +384,7 @@ public class OtrActivator
             // Register the configuration form.
             bundleContext.registerService(ConfigurationForm.class.getName(),
                 new LazyConfigurationForm(
-                    "net.java.sip.communicator.plugin.otr.authdialog." +
-                        "OtrConfigurationPanel",
+                    "net.java.sip.communicator.plugin.otr.OtrConfigurationPanel",
                     getClass().getClassLoader(),
                     "plugin.otr.configform.ICON",
                     "service.gui.CHAT", 1),
@@ -465,19 +448,6 @@ public class OtrActivator
         return metaCListService;
     }
 
-    /**
-     * Gets the service giving access to message history.
-     *
-     * @return the service giving access to message history.
-     */
-    public static MessageHistoryService getMessageHistoryService()
-    {
-        if (messageHistoryService == null)
-            messageHistoryService = ServiceUtils.getService(bundleContext, 
-                MessageHistoryService.class);
-        return messageHistoryService;
-    }
-    
     /**
      * The factory that will be registered in OSGi and will create
      * otr menu instances.

@@ -7,15 +7,12 @@
 package net.java.sip.communicator.plugin.otr;
 
 import java.awt.event.*;
-import java.security.*;
 
 import javax.swing.*;
 
 import net.java.otr4j.*;
 import net.java.sip.communicator.plugin.desktoputil.*;
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
 import net.java.sip.communicator.service.protocol.*;
-import net.java.sip.communicator.util.*;
 
 /**
  * A special {@link JMenu} that holds the menu items for controlling the
@@ -23,15 +20,12 @@ import net.java.sip.communicator.util.*;
  *
  * @author George Politis
  * @author Lyubomir Marinov
- * @author Marin Dzhigarov
  */
 class OtrContactMenu
     implements ActionListener,
                ScOtrEngineListener,
                ScOtrKeyManagerListener
 {
-    private final Logger logger = Logger.getLogger(OtrContactMenu.class);
-
     private static final String ACTION_COMMAND_AUTHENTICATE_BUDDY =
         "AUTHENTICATE_BUDDY";
 
@@ -51,7 +45,7 @@ class OtrContactMenu
 
     private static final String ACTION_COMMAND_START_OTR = "START_OTR";
 
-    private final OtrContact contact;
+    private final Contact contact;
 
     /**
      * The indicator which determines whether this <tt>JMenu</tt> is displayed
@@ -75,27 +69,23 @@ class OtrContactMenu
     /**
      * The OtrContactMenu constructor.
      *
-     * @param otrContact the OtrContact this menu refers to.
+     * @param contact the Contact this menu refers to.
      * @param inMacOSXScreenMenuBar <tt>true</tt> if the new menu is to be
      * displayed in the Mac OS X screen menu bar; <tt>false</tt>, otherwise
      * @param menu the parent menu
      */
-    public OtrContactMenu(  OtrContact otrContact,
+    public OtrContactMenu(  Contact contact,
                             boolean inMacOSXScreenMenuBar,
                             JMenu menu,
                             boolean isSeparateMenu)
     {
-        this.contact = otrContact;
+        this.contact = contact;
         this.inMacOSXScreenMenuBar = inMacOSXScreenMenuBar;
         this.parentMenu = menu;
-        String resourceName =
-            otrContact.resource != null
-                ? "/" + otrContact.resource.getResourceName()
-                : "";
+
         separateMenu
             = isSeparateMenu
-                ? new SIPCommMenu(otrContact.contact.getDisplayName()
-                                    + resourceName)
+                ? new SIPCommMenu(contact.getDisplayName())
                 : null;
 
         /*
@@ -113,10 +103,8 @@ class OtrContactMenu
                 this,
                 OtrActivator.scOtrEngine, OtrActivator.scOtrKeyManager);
 
-        setSessionStatus(
-            OtrActivator.scOtrEngine.getSessionStatus(this.contact));
-        setOtrPolicy(
-            OtrActivator.scOtrEngine.getContactPolicy(otrContact.contact));
+        setSessionStatus(OtrActivator.scOtrEngine.getSessionStatus(contact));
+        setOtrPolicy(OtrActivator.scOtrEngine.getContactPolicy(contact));
 
         buildMenu();
     }
@@ -129,28 +117,12 @@ class OtrContactMenu
         String actionCommand = e.getActionCommand();
 
         if (ACTION_COMMAND_END_OTR.equals(actionCommand))
-        {
-            OtrPolicy policy =
-                OtrActivator.scOtrEngine.getContactPolicy(contact.contact);
-            policy.setSendWhitespaceTag(false);
-            OtrActivator.scOtrEngine.setContactPolicy(contact.contact, policy);
-
             // End session.
             OtrActivator.scOtrEngine.endSession(contact);
-        }
 
         else if (ACTION_COMMAND_START_OTR.equals(actionCommand))
-        {
-            OtrPolicy policy =
-                OtrActivator.scOtrEngine.getContactPolicy(contact.contact);
-            OtrPolicy globalPolicy =
-                OtrActivator.scOtrEngine.getGlobalPolicy();
-            policy.setSendWhitespaceTag(globalPolicy.getSendWhitespaceTag());
-            OtrActivator.scOtrEngine.setContactPolicy(contact.contact, policy);
-
             // Start session.
             OtrActivator.scOtrEngine.startSession(contact);
-        }
 
         else if (ACTION_COMMAND_REFRESH_OTR.equals(actionCommand))
             // Refresh session.
@@ -163,22 +135,22 @@ class OtrContactMenu
         else if (ACTION_COMMAND_CB_ENABLE.equals(actionCommand))
         {
             OtrPolicy policy =
-                OtrActivator.scOtrEngine.getContactPolicy(contact.contact);
+                OtrActivator.scOtrEngine.getContactPolicy(contact);
             boolean state = ((JCheckBoxMenuItem) e.getSource()).isSelected();
 
             policy.setEnableManual(state);
-            OtrActivator.scOtrEngine.setContactPolicy(contact.contact, policy);
+            OtrActivator.scOtrEngine.setContactPolicy(contact, policy);
         }
 
         else if (ACTION_COMMAND_CB_AUTO.equals(actionCommand))
         {
             OtrPolicy policy =
-                OtrActivator.scOtrEngine.getContactPolicy(contact.contact);
+                OtrActivator.scOtrEngine.getContactPolicy(contact);
             boolean state = ((JCheckBoxMenuItem) e.getSource()).isSelected();
 
-            policy.setSendWhitespaceTag(state);
+            policy.setEnableAlways(state);
 
-            OtrActivator.scOtrEngine.setContactPolicy(contact.contact, policy);
+            OtrActivator.scOtrEngine.setContactPolicy(contact, policy);
         }
 
         else if (ACTION_COMMAND_CB_AUTO_ALL.equals(actionCommand))
@@ -187,7 +159,10 @@ class OtrContactMenu
                 OtrActivator.scOtrEngine.getGlobalPolicy();
             boolean state = ((JCheckBoxMenuItem) e.getSource()).isSelected();
 
-            globalPolicy.setSendWhitespaceTag(state);
+            globalPolicy.setEnableAlways(state);
+            OtrActivator.configService.setProperty(
+                OtrActivator.AUTO_INIT_OTR_PROP,
+                Boolean.toString(state));
 
             OtrActivator.scOtrEngine.setGlobalPolicy(globalPolicy);
         }
@@ -195,17 +170,17 @@ class OtrContactMenu
         else if (ACTION_COMMAND_CB_REQUIRE.equals(actionCommand))
         {
             OtrPolicy policy =
-                OtrActivator.scOtrEngine.getContactPolicy(contact.contact);
+                OtrActivator.scOtrEngine.getContactPolicy(contact);
             boolean state = ((JCheckBoxMenuItem) e.getSource()).isSelected();
 
             policy.setRequireEncryption(state);
             OtrActivator.configService.setProperty(
                 OtrActivator.OTR_MANDATORY_PROP,
                 Boolean.toString(state));
-            OtrActivator.scOtrEngine.setContactPolicy(contact.contact, policy);
+            OtrActivator.scOtrEngine.setContactPolicy(contact, policy);
         }
         else if (ACTION_COMMAND_CB_RESET.equals(actionCommand))
-            OtrActivator.scOtrEngine.setContactPolicy(contact.contact, null);
+            OtrActivator.scOtrEngine.setContactPolicy(contact, null);
     }
 
     /*
@@ -214,8 +189,7 @@ class OtrContactMenu
     public void contactPolicyChanged(Contact contact)
     {
         // Update the corresponding to the contact menu.
-        if (OtrContactMenu.this.contact != null &&
-            contact.equals(OtrContactMenu.this.contact.contact))
+        if (contact.equals(OtrContactMenu.this.contact))
             setOtrPolicy(OtrActivator.scOtrEngine.getContactPolicy(contact));
     }
 
@@ -223,11 +197,10 @@ class OtrContactMenu
      * Implements ScOtrKeyManagerListener#contactVerificationStatusChanged(
      * Contact).
      */
-    public void contactVerificationStatusChanged(OtrContact otrContact)
+    public void contactVerificationStatusChanged(Contact contact)
     {
-        if (otrContact.equals(OtrContactMenu.this.contact))
-            setSessionStatus(
-                OtrActivator.scOtrEngine.getSessionStatus(otrContact));
+        if (contact.equals(OtrContactMenu.this.contact))
+            setSessionStatus(OtrActivator.scOtrEngine.getSessionStatus(contact));
     }
 
     /**
@@ -247,7 +220,7 @@ class OtrContactMenu
      */
     public void globalPolicyChanged()
     {
-        setOtrPolicy(OtrActivator.scOtrEngine.getContactPolicy(contact.contact));
+        setOtrPolicy(OtrActivator.scOtrEngine.getContactPolicy(contact));
     }
 
     /**
@@ -259,8 +232,7 @@ class OtrContactMenu
         if(separateMenu != null)
             separateMenu.removeAll();
 
-        OtrPolicy policy =
-            OtrActivator.scOtrEngine.getContactPolicy(contact.contact);
+        OtrPolicy policy = OtrActivator.scOtrEngine.getContactPolicy(contact);
 
         JMenuItem endOtr = new JMenuItem();
         endOtr.setText(OtrActivator.resourceService
@@ -354,8 +326,7 @@ class OtrContactMenu
                 OtrActivator.resourceService
                     .getI18NString(
                         "plugin.otr.menu.CB_AUTO",
-                        new String[]
-                            {contact.contact.getDisplayName()})));
+                        new String[] {contact.getDisplayName()})));
         cbAlways.setEnabled(policy.getEnableManual());
 
         cbAlways.setSelected(policy.getEnableAlways());
@@ -368,9 +339,13 @@ class OtrContactMenu
             .getI18NString("plugin.otr.menu.CB_AUTO_ALL"));
         cbAlwaysAll.setEnabled(policy.getEnableManual());
 
+        String autoInitPropValue
+            = OtrActivator.configService.getString(
+                OtrActivator.AUTO_INIT_OTR_PROP);
         boolean isAutoInit =
             OtrActivator.scOtrEngine.getGlobalPolicy().getEnableAlways();
-
+        if (autoInitPropValue != null)
+            isAutoInit = Boolean.parseBoolean(autoInitPropValue);
         cbAlwaysAll.setSelected(isAutoInit);
 
         cbAlwaysAll.setActionCommand(ACTION_COMMAND_CB_AUTO_ALL);
@@ -432,11 +407,10 @@ class OtrContactMenu
     /*
      * Implements ScOtrEngineListener#sessionStatusChanged(Contact).
      */
-    public void sessionStatusChanged(OtrContact otrContact)
+    public void sessionStatusChanged(Contact contact)
     {
-        if (otrContact.equals(OtrContactMenu.this.contact))
-            setSessionStatus(
-                OtrActivator.scOtrEngine.getSessionStatus(otrContact));
+        if (contact.equals(OtrContactMenu.this.contact))
+            setSessionStatus(OtrActivator.scOtrEngine.getSessionStatus(contact));
     }
 
     /**
@@ -450,9 +424,6 @@ class OtrContactMenu
     {
         if (sessionStatus != this.sessionStatus)
         {
-            logger.debug(
-                "Setting session status of contact " + contact.contact +
-                " to " + sessionStatus + ". Was " + this.sessionStatus);
             this.sessionStatus = sessionStatus;
 
             if (separateMenu != null)
@@ -499,14 +470,8 @@ class OtrContactMenu
         switch (sessionStatus)
         {
         case ENCRYPTED:
-            PublicKey pubKey =
-                OtrActivator.scOtrEngine.getRemotePublicKey(contact);
-            String fingerprint =
-                OtrActivator.scOtrKeyManager.
-                    getFingerprintFromPublicKey(pubKey);
             imageID
-                = OtrActivator.scOtrKeyManager.isVerified(
-                    contact.contact, fingerprint)
+                = OtrActivator.scOtrKeyManager.isVerified(contact)
                     ? "plugin.otr.ENCRYPTED_ICON_16x16"
                     : "plugin.otr.ENCRYPTED_UNVERIFIED_ICON_16x16";
             break;
@@ -524,16 +489,5 @@ class OtrContactMenu
         }
 
         separateMenu.setIcon(OtrActivator.resourceService.getImage(imageID));
-    }
-
-    @Override
-    public void multipleInstancesDetected(OtrContact contact) {}
-
-    @Override
-    public void outgoingSessionChanged(OtrContact otrContact)
-    {
-        if (otrContact.equals(OtrContactMenu.this.contact))
-            setSessionStatus(
-                OtrActivator.scOtrEngine.getSessionStatus(otrContact));
     }
 }

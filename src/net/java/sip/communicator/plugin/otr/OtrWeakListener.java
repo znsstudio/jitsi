@@ -8,7 +8,6 @@ package net.java.sip.communicator.plugin.otr;
 
 import java.lang.ref.*;
 
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
 import net.java.sip.communicator.service.protocol.*;
 
 /**
@@ -94,7 +93,7 @@ public class OtrWeakListener
      * Forwards the event/notification to the associated
      * <tt>T</tt> if it is still needed by the application.
      */
-    public void contactVerificationStatusChanged(OtrContact contact)
+    public void contactVerificationStatusChanged(Contact contact)
     {
         ScOtrKeyManagerListener l = getListener();
 
@@ -146,35 +145,11 @@ public class OtrWeakListener
      * Forwards the event/notification to the associated
      * <tt>T</tt> if it is still needed by the application.
      */
-    public void sessionStatusChanged(OtrContact contact)
+    public void sessionStatusChanged(Contact contact)
     {
         ScOtrEngineListener l = getListener();
 
         if (l != null)
             l.sessionStatusChanged(contact);
-    }
-
-    /**
-     * Forwards the event/notification to the associated
-     * <tt>T</tt> if it is still needed by the application.
-     */
-    public void multipleInstancesDetected(OtrContact contact)
-    {
-        ScOtrEngineListener l = getListener();
-
-        if (l != null)
-            l.multipleInstancesDetected(contact);
-    }
-
-    /**
-     * Forwards the event/notification to the associated
-     * <tt>T</tt> if it is still needed by the application.
-     */
-    public void outgoingSessionChanged(OtrContact contact)
-    {
-        ScOtrEngineListener l = getListener();
-
-        if (l != null)
-            l.outgoingSessionChanged(contact);
     }
 }

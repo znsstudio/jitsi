@@ -13,11 +13,11 @@ import java.util.*;
 import javax.swing.*;
 import javax.swing.event.*;
 
-import net.java.sip.communicator.plugin.desktoputil.*;
 import net.java.sip.communicator.service.contactlist.*;
 import net.java.sip.communicator.service.gui.*;
 import net.java.sip.communicator.service.gui.Container;
 import net.java.sip.communicator.service.protocol.*;
+import net.java.sip.communicator.plugin.desktoputil.*;
 
 /**
  * @author George Politis
@@ -95,54 +95,14 @@ public class OtrMetaContactMenu
 
             if (metaContact.getContactCount() == 1)
             {
-                Contact contact = contacts.next();
-                Collection<ContactResource> resources = contact.getResources();
-                if (contact.supportResources() &&
-                    resources != null &&
-                    resources.size() > 0)
-                {
-                    for (ContactResource resource : resources)
-                    {
-                        new OtrContactMenu(
-                            OtrContactManager.getOtrContact(contact, resource),
-                            inMacOSXScreenMenuBar,
-                            menu,
-                            true);
-                    }
-                }
-                else
-                    new OtrContactMenu(
-                        OtrContactManager.getOtrContact(contact, null),
-                        inMacOSXScreenMenuBar,
-                        menu,
-                        false);
+                new OtrContactMenu(
+                    contacts.next(), inMacOSXScreenMenuBar, menu, false);
             }
             else
                 while (contacts.hasNext())
                 {
-                    Contact contact = contacts.next();
-                    Collection<ContactResource> resources =
-                        contact.getResources();
-                    if (contact.supportResources() &&
-                        resources != null &&
-                        resources.size() > 0)
-                    {
-                        for (ContactResource resource : resources)
-                        {
-                            new OtrContactMenu(
-                                OtrContactManager.getOtrContact(
-                                    contact, resource),
-                                inMacOSXScreenMenuBar,
-                                menu,
-                                true);
-                        }
-                    }
-                    else
-                        new OtrContactMenu(
-                            OtrContactManager.getOtrContact(contact, null),
-                            inMacOSXScreenMenuBar,
-                            menu,
-                            true);
+                    new OtrContactMenu(
+                        contacts.next(), inMacOSXScreenMenuBar, menu, true);
                 }
         }
     }

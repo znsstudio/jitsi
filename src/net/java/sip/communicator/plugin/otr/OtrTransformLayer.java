@@ -7,8 +7,6 @@
 package net.java.sip.communicator.plugin.otr;
 
 import net.java.otr4j.*;
-import net.java.otr4j.io.*;
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
 import net.java.sip.communicator.service.protocol.*;
 import net.java.sip.communicator.service.protocol.event.*;
 
@@ -26,12 +24,10 @@ public class OtrTransformLayer
     public MessageDeliveredEvent messageDelivered(MessageDeliveredEvent evt)
     {
         Contact contact = evt.getDestinationContact();
-        OtrContact otrContact =
-            OtrContactManager.getOtrContact(contact, evt.getContactResource());
 
         OtrPolicy policy = OtrActivator.scOtrEngine.getContactPolicy(contact);
         ScSessionStatus sessionStatus =
-            OtrActivator.scOtrEngine.getSessionStatus(otrContact);
+            OtrActivator.scOtrEngine.getSessionStatus(contact);
         // If OTR is disabled and we are not over an encrypted session, don't
         // process anything.
         if (!policy.getEnableManual()
@@ -65,12 +61,10 @@ public class OtrTransformLayer
         MessageDeliveredEvent evt)
     {
         Contact contact = evt.getDestinationContact();
-        OtrContact otrContact =
-            OtrContactManager.getOtrContact(contact, evt.getContactResource());
 
         OtrPolicy policy = OtrActivator.scOtrEngine.getContactPolicy(contact);
         ScSessionStatus sessionStatus =
-            OtrActivator.scOtrEngine.getSessionStatus(otrContact);
+            OtrActivator.scOtrEngine.getSessionStatus(contact);
         // If OTR is disabled and we are not over an encrypted session, don't
         // process anything.
         if (!policy.getEnableManual()
@@ -86,7 +80,7 @@ public class OtrTransformLayer
         // Process the outgoing message.
         String msgContent = evt.getSourceMessage().getContent();
         String processedMessageContent =
-            OtrActivator.scOtrEngine.transformSending(otrContact, msgContent);
+            OtrActivator.scOtrEngine.transformSending(contact, msgContent);
 
         if (processedMessageContent == null
             || processedMessageContent.length() < 1)
@@ -100,21 +94,12 @@ public class OtrTransformLayer
             contact.getProtocolProvider().getOperationSet(
                 OperationSetBasicInstantMessaging.class);
         Message processedMessage =
-            imOpSet.createMessage(
-                processedMessageContent,
-                evt.getSourceMessage().getContentType(),
-                evt.getSourceMessage().getEncoding(),
-                evt.getSourceMessage().getSubject());
+            imOpSet.createMessage(processedMessageContent);
 
         // Create a new event and return.
         MessageDeliveredEvent processedEvent =
             new MessageDeliveredEvent(processedMessage, contact, evt
                 .getTimestamp());
-
-        if(processedMessage.getContent().contains(SerializationConstants.HEAD))
-        {
-            processedEvent.setMessageEncrypted(true);
-        }
 
         return processedEvent;
     }
@@ -125,12 +110,10 @@ public class OtrTransformLayer
     public MessageReceivedEvent messageReceived(MessageReceivedEvent evt)
     {
         Contact contact = evt.getSourceContact();
-        OtrContact otrContact =
-            OtrContactManager.getOtrContact(contact, evt.getContactResource());
 
         OtrPolicy policy = OtrActivator.scOtrEngine.getContactPolicy(contact);
         ScSessionStatus sessionStatus =
-            OtrActivator.scOtrEngine.getSessionStatus(otrContact);
+            OtrActivator.scOtrEngine.getSessionStatus(contact);
         // If OTR is disabled and we are not over an encrypted session, don't
         // process anything.
         if (!policy.getEnableManual()
@@ -142,7 +125,7 @@ public class OtrTransformLayer
         String msgContent = evt.getSourceMessage().getContent();
 
         String processedMessageContent =
-            OtrActivator.scOtrEngine.transformReceiving(otrContact, msgContent);
+            OtrActivator.scOtrEngine.transformReceiving(contact, msgContent);
 
         if (processedMessageContent == null
             || processedMessageContent.length() < 1)
@@ -157,9 +140,7 @@ public class OtrTransformLayer
                 OperationSetBasicInstantMessaging.class);
         Message processedMessage =
             imOpSet.createMessageWithUID(
-                processedMessageContent,
-                evt.getSourceMessage().getContentType(),
-                evt.getSourceMessage().getMessageUID());
+                processedMessageContent, evt.getSourceMessage().getMessageUID());
 
         // Create a new event and return.
         MessageReceivedEvent processedEvent =

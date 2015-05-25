@@ -8,14 +8,12 @@ package net.java.sip.communicator.plugin.otr.authdialog;
 
 import java.awt.*;
 import java.awt.event.*;
-import java.security.*;
 
 import javax.swing.*;
 
 import net.java.sip.communicator.plugin.desktoputil.*;
 import net.java.sip.communicator.plugin.otr.*;
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
-import net.java.sip.communicator.plugin.otr.authdialog.FingerprintAuthenticationPanel.ActionComboBoxItem;
+import net.java.sip.communicator.plugin.otr.authdialog.FingerprintAuthenticationPanel.*;
 import net.java.sip.communicator.service.protocol.*;
 
 /**
@@ -26,7 +24,7 @@ import net.java.sip.communicator.service.protocol.*;
 public class OtrBuddyAuthenticationDialog
     extends SIPCommDialog
 {
-    private final OtrContact contact;
+    private final Contact contact;
 
     /**
      * The {@link OtrBuddyAuthenticationDialog} ctor.
@@ -34,7 +32,7 @@ public class OtrBuddyAuthenticationDialog
      * @param contact The {@link Contact} this
      *            {@link OtrBuddyAuthenticationDialog} refers to.
      */
-    public OtrBuddyAuthenticationDialog(OtrContact contact)
+    public OtrBuddyAuthenticationDialog(Contact contact)
     {
         super(false);
         this.contact = contact;
@@ -180,20 +178,13 @@ public class OtrBuddyAuthenticationDialog
                     ActionComboBoxItem actionItem =
                         (ActionComboBoxItem) fingerprintPanel.
                             getCbAction().getSelectedItem();
-                    PublicKey pubKey =
-                        OtrActivator.scOtrEngine.getRemotePublicKey(contact);
-                    String fingerprint =
-                        OtrActivator.scOtrKeyManager.
-                            getFingerprintFromPublicKey(pubKey);
                     switch (actionItem.action)
                     {
                     case I_HAVE:
-                        OtrActivator.scOtrKeyManager.verify(
-                            contact, fingerprint);
+                        OtrActivator.scOtrKeyManager.verify(contact);
                         break;
                     case I_HAVE_NOT:
-                        OtrActivator.scOtrKeyManager.unverify(
-                            contact, fingerprint);
+                        OtrActivator.scOtrKeyManager.unverify(contact);
                         break;
                     }
                     dispose();

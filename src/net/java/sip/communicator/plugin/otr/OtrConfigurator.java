@@ -144,31 +144,4 @@ public class OtrConfigurator
     {
         return OtrActivator.configService.getInt(getID(id), defaultValue);
     }
-
-    /**
-     * Appends <tt>value</tt> to the old value of the property with the
-     * specified name. The two values will be comma separated.
-     * 
-     * @param id the name of the property to append to
-     * @param value the value to append
-     */
-    public void appendProperty(String id, Object value)
-    {
-        Object oldValue = OtrActivator.configService.getProperty(getID(id));
-
-        String newValue =
-            oldValue == null ? value.toString() : oldValue + "," + value;
-
-        setProperty(id, newValue);
-    }
-
-    public List<String> getAppendedProperties(String id)
-    {
-        String listProperties =
-           (String) OtrActivator.configService.getProperty(getID(id));
-
-        if (listProperties == null) return new ArrayList<String>();
-
-        return Arrays.asList(listProperties.split(","));
-    }
 }

@@ -12,9 +12,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import net.java.otr4j.*;
-import net.java.otr4j.crypto.*;
 import net.java.otr4j.session.*;
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
 import net.java.sip.communicator.plugin.otr.authdialog.*;
 import net.java.sip.communicator.service.browserlauncher.*;
 import net.java.sip.communicator.service.contactlist.*;
@@ -53,60 +51,21 @@ public class ScOtrEngineImpl
 
         public OtrPolicy getSessionPolicy(SessionID sessionID)
         {
-            return getContactPolicy(getOtrContact(sessionID).contact);
+            return getContactPolicy(getContact(sessionID));
         }
 
         public void injectMessage(SessionID sessionID, String messageText)
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            Contact contact = otrContact.contact;
-            ContactResource resource = null;
-
-            if (contact.supportResources())
-            {
-                Collection<ContactResource> resources = contact.getResources();
-                if (resources != null)
-                {
-                    for (ContactResource r : resources)
-                    {
-                        if (r.equals(otrContact.resource))
-                        {
-                            resource = r;
-                            break;
-                        }
-                    }
-                }
-            }
-
+            Contact contact = getContact(sessionID);
             OperationSetBasicInstantMessaging imOpSet
                 = contact
                     .getProtocolProvider()
                         .getOperationSet(
                                 OperationSetBasicInstantMessaging.class);
-
-            // This is a dirty way of detecting whether the injected message
-            // contains HTML markup. If this is the case then we should create
-            // the message with the appropriate content type so that the remote
-            // party can properly display the HTML.
-            // When otr4j injects QueryMessages it calls
-            // OtrEngineHost.getFallbackMessage() which is currently the only
-            // host method that uses HTML so we can simply check if the injected
-            // message contains the string that getFallbackMessage() returns.
-            String otrHtmlFallbackMessage
-                = "<a href=\"http://en.wikipedia.org/wiki/Off-the-Record_Messaging\">";
-            String contentType
-                = messageText.contains(otrHtmlFallbackMessage)
-                    ? OperationSetBasicInstantMessaging.HTML_MIME_TYPE
-                    : OperationSetBasicInstantMessaging.DEFAULT_MIME_TYPE;
-            Message message
-                = imOpSet.createMessage(
-                        messageText,
-                        contentType,
-                        OperationSetBasicInstantMessaging.DEFAULT_MIME_ENCODING,
-                        null);
+            Message message = imOpSet.createMessage(messageText);
 
             injectedMessageUIDs.add(message.getMessageUID());
-            imOpSet.sendInstantMessage(contact, resource, message);
+            imOpSet.sendInstantMessage(contact, message);
         }
 
         public void showError(SessionID sessionID, String err)
@@ -116,11 +75,10 @@ public class ScOtrEngineImpl
 
         public void showWarning(SessionID sessionID, String warn)
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            Contact contact = otrContact.contact;
             OtrActivator.uiService.getChat(contact).addMessage(
                 contact.getDisplayName(), new Date(),
                 Chat.SYSTEM_MESSAGE, warn,
@@ -131,16 +89,14 @@ public class ScOtrEngineImpl
         public void unreadableMessageReceived(SessionID sessionID)
             throws OtrException
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            String resourceName = otrContact.resource != null ?
-                "/" + otrContact.resource.getResourceName() : "";
+            Contact contact = getContact(sessionID);
+            if (contact == null)
+                return;
 
-            Contact contact = otrContact.contact;
             String error =
                 OtrActivator.resourceService.getI18NString(
                     "plugin.otr.activator.unreadablemsgreceived",
-                    new String[]
-                        {contact.getDisplayName() + resourceName});
+                    new String[] {contact.getDisplayName()});
             OtrActivator.uiService.getChat(contact).addMessage(
                 contact.getDisplayName(), new Date(),
                 Chat.ERROR_MESSAGE, error,
@@ -151,11 +107,10 @@ public class ScOtrEngineImpl
         public void unencryptedMessageReceived(SessionID sessionID, String msg)
             throws OtrException
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            Contact contact = otrContact.contact;
             String warn =
                 OtrActivator.resourceService.getI18NString(
                     "plugin.otr.activator.unencryptedmsgreceived");
@@ -169,11 +124,10 @@ public class ScOtrEngineImpl
         public void smpError(SessionID sessionID, int tlvType, boolean cheated)
             throws OtrException
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            Contact contact = otrContact.contact;
             logger.debug("SMP error occurred"
                         + ". Contact: " + contact.getDisplayName()
                         + ". TLV type: " + tlvType
@@ -187,11 +141,11 @@ public class ScOtrEngineImpl
                 Chat.ERROR_MESSAGE, error,
                 OperationSetBasicInstantMessaging.DEFAULT_MIME_TYPE);
 
-            SmpProgressDialog progressDialog = progressDialogMap.get(otrContact);
+            SmpProgressDialog progressDialog = progressDialogMap.get(contact);
             if (progressDialog == null)
             {
                 progressDialog = new SmpProgressDialog(contact);
-                progressDialogMap.put(otrContact, progressDialog);
+                progressDialogMap.put(contact, progressDialog);
             }
 
             progressDialog.setProgressFail();
@@ -201,11 +155,10 @@ public class ScOtrEngineImpl
         @Override
         public void smpAborted(SessionID sessionID) throws OtrException
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            Contact contact = otrContact.contact;
             Session session = otrEngine.getSession(sessionID);
             if (session.isSmpInProgress())
             {
@@ -218,12 +171,11 @@ public class ScOtrEngineImpl
                     Chat.SYSTEM_MESSAGE, warn,
                     OperationSetBasicInstantMessaging.DEFAULT_MIME_TYPE);
 
-                SmpProgressDialog progressDialog =
-                    progressDialogMap.get(otrContact);
+                SmpProgressDialog progressDialog = progressDialogMap.get(contact);
                 if (progressDialog == null)
                 {
                     progressDialog = new SmpProgressDialog(contact);
-                    progressDialogMap.put(otrContact, progressDialog);
+                    progressDialogMap.put(contact, progressDialog);
                 }
 
                 progressDialog.setProgressFail();
@@ -232,21 +184,17 @@ public class ScOtrEngineImpl
         }
 
         @Override
-        public void finishedSessionMessage(SessionID sessionID, String msgText)
+        public void finishedSessionMessage(SessionID sessionID)
             throws OtrException
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            String resourceName = otrContact.resource != null ?
-                "/" + otrContact.resource.getResourceName() : "";
-            Contact contact = otrContact.contact;
             String error =
                 OtrActivator.resourceService.getI18NString(
                     "plugin.otr.activator.sessionfinishederror",
-                    new String[]
-                        {msgText, contact.getDisplayName() + resourceName});
+                    new String[] {contact.getDisplayName()});
             OtrActivator.uiService.getChat(contact).addMessage(
                 contact.getDisplayName(), new Date(),
                 Chat.ERROR_MESSAGE, error,
@@ -257,16 +205,14 @@ public class ScOtrEngineImpl
         public void requireEncryptedMessage(SessionID sessionID, String msgText)
             throws OtrException
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-                Contact contact = otrContact.contact;
             String error =
                 OtrActivator.resourceService.getI18NString(
                     "plugin.otr.activator.requireencryption",
-                    new String[]
-                        {msgText});
+                    new String[] {contact.getDisplayName()});
             OtrActivator.uiService.getChat(contact).addMessage(
                 contact.getDisplayName(), new Date(),
                 Chat.ERROR_MESSAGE, error,
@@ -283,24 +229,21 @@ public class ScOtrEngineImpl
         }
 
         @Override
-        public void askForSecret(
-            SessionID sessionID, InstanceTag receiverTag, String question)
+        public void askForSecret(SessionID sessionID, String question)
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            Contact contact = otrContact.contact;
             SmpAuthenticateBuddyDialog dialog =
-                new SmpAuthenticateBuddyDialog(
-                    otrContact, receiverTag, question);
+                new SmpAuthenticateBuddyDialog(contact, question);
             dialog.setVisible(true);
 
-            SmpProgressDialog progressDialog = progressDialogMap.get(otrContact);
+            SmpProgressDialog progressDialog = progressDialogMap.get(contact);
             if (progressDialog == null)
             {
                 progressDialog = new SmpProgressDialog(contact);
-                progressDialogMap.put(otrContact, progressDialog);
+                progressDialogMap.put(contact, progressDialog);
             }
 
             progressDialog.init();
@@ -308,21 +251,19 @@ public class ScOtrEngineImpl
         }
 
         @Override
-        public void verify(
-            SessionID sessionID, String fingerprint, boolean approved)
+        public void verify(SessionID sessionID, boolean approved)
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            Contact contact = otrContact.contact;
-            OtrActivator.scOtrKeyManager.verify(otrContact, fingerprint);
+            OtrActivator.scOtrKeyManager.verify(contact);
 
-            SmpProgressDialog progressDialog = progressDialogMap.get(otrContact);
+            SmpProgressDialog progressDialog = progressDialogMap.get(contact);
             if (progressDialog == null)
             {
                 progressDialog = new SmpProgressDialog(contact);
-                progressDialogMap.put(otrContact, progressDialog);
+                progressDialogMap.put(contact, progressDialog);
             }
 
             progressDialog.setProgressSuccess();
@@ -330,20 +271,19 @@ public class ScOtrEngineImpl
         }
 
         @Override
-        public void unverify(SessionID sessionID, String fingerprint)
+        public void unverify(SessionID sessionID)
         {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
+            Contact contact = getContact(sessionID);
+            if (contact == null)
                 return;
 
-            Contact contact = otrContact.contact;
-            OtrActivator.scOtrKeyManager.unverify(otrContact, fingerprint);
+            OtrActivator.scOtrKeyManager.unverify(contact);
 
-            SmpProgressDialog progressDialog = progressDialogMap.get(otrContact);
+            SmpProgressDialog progressDialog = progressDialogMap.get(contact);
             if (progressDialog == null)
             {
                 progressDialog = new SmpProgressDialog(contact);
-                progressDialogMap.put(otrContact, progressDialog);
+                progressDialogMap.put(contact, progressDialog);
             }
 
             progressDialog.setProgressFail();
@@ -372,50 +312,6 @@ public class ScOtrEngineImpl
                 "plugin.otr.activator.fallbackmessage",
                 new String[] {accountID.getDisplayName()});
         }
-
-        @Override
-        public void multipleInstancesDetected(SessionID sessionID)
-        {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
-                return;
-
-            String resourceName = otrContact.resource != null ?
-                "/" + otrContact.resource.getResourceName() : "";
-            Contact contact = otrContact.contact;
-            String message =
-                OtrActivator.resourceService.getI18NString(
-                    "plugin.otr.activator.multipleinstancesdetected",
-                    new String[]
-                        {contact.getDisplayName() + resourceName});
-            OtrActivator.uiService.getChat(contact).addMessage(
-                contact.getDisplayName(),
-                new Date(), Chat.SYSTEM_MESSAGE,
-                message,
-                OperationSetBasicInstantMessaging.HTML_MIME_TYPE);
-        }
-
-        @Override
-        public void messageFromAnotherInstanceReceived(SessionID sessionID)
-        {
-            OtrContact otrContact = getOtrContact(sessionID);
-            if (otrContact == null)
-                return;
-
-            String resourceName = otrContact.resource != null ?
-                "/" + otrContact.resource.getResourceName() : "";
-            Contact contact = otrContact.contact;
-            String message =
-                OtrActivator.resourceService.getI18NString(
-                    "plugin.otr.activator.msgfromanotherinstance",
-                    new String[]
-                        {contact.getDisplayName() + resourceName});
-            OtrActivator.uiService.getChat(contact).addMessage(
-                contact.getDisplayName(),
-                new Date(), Chat.SYSTEM_MESSAGE,
-                message,
-                OperationSetBasicInstantMessaging.HTML_MIME_TYPE);
-        }
     }
 
     /**
@@ -439,13 +335,13 @@ public class ScOtrEngineImpl
     private Map<SessionID, ScSessionStatus> scSessionStatusMap =
         new ConcurrentHashMap<SessionID, ScSessionStatus>();
 
-    private static final Map<ScSessionID, OtrContact> contactsMap =
-        new Hashtable<ScSessionID, OtrContact>();
+    private static final Map<ScSessionID, Contact> contactsMap =
+        new Hashtable<ScSessionID, Contact>();
 
-    private static final Map<OtrContact, SmpProgressDialog> progressDialogMap =
-        new ConcurrentHashMap<OtrContact, SmpProgressDialog>();
+    private static final Map<Contact, SmpProgressDialog> progressDialogMap =
+        new ConcurrentHashMap<Contact, SmpProgressDialog>();
 
-    public static OtrContact getOtrContact(SessionID sessionID)
+    public static Contact getContact(SessionID sessionID)
     {
         return contactsMap.get(new ScSessionID(sessionID));
     }
@@ -468,15 +364,13 @@ public class ScOtrEngineImpl
         return null;
     }
 
-    public static SessionID getSessionID(OtrContact otrContact)
+    public static SessionID getSessionID(Contact contact)
     {
-        ProtocolProviderService pps = otrContact.contact.getProtocolProvider();
-        String resourceName = otrContact.resource != null ?
-            "/" + otrContact.resource.getResourceName() : "";
+        ProtocolProviderService pps = contact.getProtocolProvider();
         SessionID sessionID
             = new SessionID(
                     pps.getAccountID().getAccountUniqueID(),
-                    otrContact.contact.getAddress() + resourceName,
+                    contact.getAddress(),
                     pps.getProtocolName());
 
         synchronized (contactsMap)
@@ -486,7 +380,7 @@ public class ScOtrEngineImpl
 
             ScSessionID scSessionID = new ScSessionID(sessionID);
 
-            contactsMap.put(scSessionID, otrContact);
+            contactsMap.put(scSessionID, contact);
         }
 
         return sessionID;
@@ -521,18 +415,15 @@ public class ScOtrEngineImpl
         {
             public void sessionStatusChanged(SessionID sessionID)
             {
-                OtrContact otrContact = getOtrContact(sessionID);
-                if (otrContact == null)
+                Contact contact = getContact(sessionID);
+                if (contact == null)
                     return;
 
-                String resourceName = otrContact.resource != null ?
-                    "/" + otrContact.resource.getResourceName() : "";
-                Contact contact = otrContact.contact;
                 // Cancels any scheduled tasks that will change the
                 // ScSessionStatus for this Contact
-                scheduler.cancel(otrContact);
+                scheduler.cancel(contact);
 
-                ScSessionStatus scSessionStatus = getSessionStatus(otrContact);
+                ScSessionStatus scSessionStatus = getSessionStatus(contact);
                 String message = "";
                 switch (otrEngine.getSessionStatus(sessionID))
                 {
@@ -542,38 +433,15 @@ public class ScOtrEngineImpl
                     PublicKey remotePubKey =
                         otrEngine.getRemotePublicKey(sessionID);
 
-                    String remoteFingerprint = null;
-                    try
-                    {
-                        remoteFingerprint =
-                            new OtrCryptoEngineImpl().
-                                getFingerprint(remotePubKey);
-                    }
-                    catch (OtrCryptoException e)
-                    {
-                        logger.debug(
-                            "Could not get the fingerprint from the "
-                            + "public key of contact: " + contact);
-                    }
+                    PublicKey storedPubKey =
+                        OtrActivator.scOtrKeyManager.loadPublicKey(contact);
 
-                    List<String> allFingerprintsOfContact =
-                        OtrActivator.scOtrKeyManager.
-                            getAllRemoteFingerprints(contact);
-                    if (allFingerprintsOfContact != null)
-                    {
-                        if (!allFingerprintsOfContact.contains(
-                                remoteFingerprint))
-                        {
-                            OtrActivator.scOtrKeyManager.saveFingerprint(
-                                contact, remoteFingerprint);
-                        }
-                    }
+                    if (!remotePubKey.equals(storedPubKey))
+                        OtrActivator.scOtrKeyManager.savePublicKey(contact,
+                            remotePubKey);
 
-                    if (!OtrActivator.scOtrKeyManager.isVerified(
-                            contact, remoteFingerprint))
+                    if (!OtrActivator.scOtrKeyManager.isVerified(contact))
                     {
-                        OtrActivator.scOtrKeyManager.unverify(
-                            otrContact, remoteFingerprint);
                         UUID sessionGuid = null;
                         for(ScSessionID scSessionID : contactsMap.keySet())
                         {
@@ -593,7 +461,7 @@ public class ScOtrEngineImpl
                                         + ".unverifiedsessionwarning",
                                     new String[]
                                     {
-                                        contact.getDisplayName() + resourceName,
+                                        contact.getDisplayName(),
                                         this.getClass().getName(),
                                         "AUTHENTIFICATION",
                                         sessionGuid.toString()
@@ -608,9 +476,8 @@ public class ScOtrEngineImpl
 
                     // show info whether history is on or off
                     String otrAndHistoryMessage;
-                    if(!OtrActivator.getMessageHistoryService()
-                        .isHistoryLoggingEnabled() || 
-                        !isHistoryLoggingEnabled(contact))
+                    if(!ConfigurationUtils.isHistoryLoggingEnabled()
+                        || !isHistoryLoggingEnabled(contact))
                     {
                         otrAndHistoryMessage =
                             OtrActivator.resourceService.getI18NString(
@@ -642,30 +509,13 @@ public class ScOtrEngineImpl
                         otrAndHistoryMessage,
                         OperationSetBasicInstantMessaging.HTML_MIME_TYPE);
 
-                    message =
-                        OtrActivator.resourceService.getI18NString(
-                            "plugin.otr.activator.multipleinstancesdetected",
-                            new String[]
-                                {contact.getDisplayName()});
-
-                    if (contact.supportResources()
-                        && contact.getResources() != null
-                        && contact.getResources().size() > 1)
-                        OtrActivator.uiService.getChat(contact).addMessage(
-                            contact.getDisplayName(),
-                            new Date(), Chat.SYSTEM_MESSAGE,
-                            message,
-                            OperationSetBasicInstantMessaging.DEFAULT_MIME_TYPE);
-
                     message
                         = OtrActivator.resourceService.getI18NString(
-                                OtrActivator.scOtrKeyManager.isVerified(
-                                    contact, remoteFingerprint)
+                                OtrActivator.scOtrKeyManager.isVerified(contact)
                                     ? "plugin.otr.activator.sessionstared"
                                     : "plugin.otr.activator"
                                         + ".unverifiedsessionstared",
-                                new String[]
-                                    {contact.getDisplayName() + resourceName});
+                                new String[] { contact.getDisplayName() });
 
                     break;
                 case FINISHED:
@@ -675,7 +525,7 @@ public class ScOtrEngineImpl
                         OtrActivator.resourceService.getI18NString(
                             "plugin.otr.activator.sessionfinished",
                             new String[]
-                                {contact.getDisplayName() + resourceName});
+                            { contact.getDisplayName() });
                     break;
                 case PLAINTEXT:
                     scSessionStatus = ScSessionStatus.PLAINTEXT;
@@ -683,7 +533,7 @@ public class ScOtrEngineImpl
                     message =
                         OtrActivator.resourceService.getI18NString(
                             "plugin.otr.activator.sessionlost", new String[]
-                                {contact.getDisplayName() + resourceName});
+                            { contact.getDisplayName() });
                     break;
                 }
 
@@ -693,27 +543,7 @@ public class ScOtrEngineImpl
                     OperationSetBasicInstantMessaging.HTML_MIME_TYPE);
 
                 for (ScOtrEngineListener l : getListeners())
-                    l.sessionStatusChanged(otrContact);
-            }
-
-            public void multipleInstancesDetected(SessionID sessionID)
-            {
-                OtrContact otrContact = getOtrContact(sessionID);
-                if (otrContact == null)
-                    return;
-
-                for (ScOtrEngineListener l : getListeners())
-                    l.multipleInstancesDetected(otrContact);
-            }
-
-            public void outgoingSessionChanged(SessionID sessionID)
-            {
-                OtrContact otrContact = getOtrContact(sessionID);
-                if (otrContact == null)
-                    return;
-
-                for (ScOtrEngineListener l : getListeners())
-                    l.outgoingSessionChanged(otrContact);
+                    l.sessionStatusChanged(contact);
             }
         });
     }
@@ -730,8 +560,8 @@ public class ScOtrEngineImpl
         MetaContact metaContact = OtrActivator
             .getContactListService().findMetaContactByContact(contact);
         if(metaContact != null)
-            return OtrActivator.getMessageHistoryService()
-                .isHistoryLoggingEnabled(metaContact.getMetaUID());
+            return ConfigurationUtils.isHistoryLoggingEnabled(
+                metaContact.getMetaUID());
         else
             return true;
     }
@@ -773,12 +603,12 @@ public class ScOtrEngineImpl
         }
     }
 
-    public void endSession(OtrContact otrContact)
+    public void endSession(Contact contact)
     {
-        SessionID sessionID = getSessionID(otrContact);
+        SessionID sessionID = getSessionID(contact);
         try
         {
-            setSessionStatus(otrContact, ScSessionStatus.PLAINTEXT);
+            setSessionStatus(contact, ScSessionStatus.PLAINTEXT);
 
             otrEngine.endSession(sessionID);
         }
@@ -790,14 +620,8 @@ public class ScOtrEngineImpl
 
     public OtrPolicy getContactPolicy(Contact contact)
     {
-        ProtocolProviderService pps = contact.getProtocolProvider();
-        SessionID sessionID
-            = new SessionID(
-                pps.getAccountID().getAccountUniqueID(),
-                contact.getAddress(),
-                pps.getProtocolName());
         int policy =
-            this.configurator.getPropertyInt(sessionID + "contact_policy",
+            this.configurator.getPropertyInt(getSessionID(contact) + "policy",
                 -1);
         if (policy < 0)
             return getGlobalPolicy();
@@ -807,13 +631,8 @@ public class ScOtrEngineImpl
 
     public OtrPolicy getGlobalPolicy()
     {
-        /*
-         * SEND_WHITESPACE_TAG bit will be lowered until we stabilize the OTR.
-         */
-        int defaultScOtrPolicy =
-            OtrPolicy.OTRL_POLICY_DEFAULT & ~OtrPolicy.SEND_WHITESPACE_TAG;
-        return new OtrPolicyImpl(this.configurator.getPropertyInt(
-            "GLOBAL_POLICY", defaultScOtrPolicy));
+        return new OtrPolicyImpl(this.configurator.getPropertyInt("POLICY",
+            OtrPolicy.OTRL_POLICY_MANUAL));
     }
 
     /**
@@ -843,31 +662,31 @@ public class ScOtrEngineImpl
     {
         private final Timer timer = new Timer();
 
-        private final Map<OtrContact, TimerTask> tasks =
-            new ConcurrentHashMap<OtrContact, TimerTask>();
+        private final Map<Contact, TimerTask> tasks =
+            new ConcurrentHashMap<Contact, TimerTask>();
 
         public void scheduleScSessionStatusChange(
-            final OtrContact otrContact, final ScSessionStatus status)
+            final Contact contact, final ScSessionStatus status)
         {
-            cancel(otrContact);
+            cancel(contact);
 
             TimerTask task = new TimerTask() {
                 @Override
                 public void run()
                 {
-                    setSessionStatus(otrContact, status);
+                    setSessionStatus(contact, status);
                 }
             };
             timer.schedule(task, SESSION_TIMEOUT);
-            tasks.put(otrContact, task);
+            tasks.put(contact, task);
         }
 
-        public void cancel(final OtrContact otrContact)
+        public void cancel(final Contact contact)
         {
-            TimerTask task = tasks.get(otrContact);
+            TimerTask task = tasks.get(contact);
             if (task != null)
                 task.cancel();
-            tasks.remove(otrContact);
+            tasks.remove(contact);
         }
 
         public void serviceChanged(ServiceEvent ev)
@@ -884,15 +703,13 @@ public class ScOtrEngineImpl
                 ProtocolProviderService provider
                     = (ProtocolProviderService) service;
     
-                Iterator<OtrContact> i = tasks.keySet().iterator();
+                Iterator<Contact> i = tasks.keySet().iterator();
     
                 while (i.hasNext())
                 {
-                    OtrContact otrContact = i.next();
-                    if (provider.equals(
-                        otrContact.contact.getProtocolProvider()))
-                    {
-                        cancel(otrContact);
+                    Contact contact = i.next();
+                    if (provider.equals(contact.getProtocolProvider())) {
+                        cancel(contact);
                         i.remove();
                     }
                 }
@@ -900,15 +717,14 @@ public class ScOtrEngineImpl
         }
     }
 
-    private void setSessionStatus(OtrContact contact, ScSessionStatus status)
+    private void setSessionStatus(Contact contact, ScSessionStatus status)
     {
         scSessionStatusMap.put(getSessionID(contact), status);
-        scheduler.cancel(contact);
         for (ScOtrEngineListener l : getListeners())
             l.sessionStatusChanged(contact);
     }
 
-    public ScSessionStatus getSessionStatus(OtrContact contact)
+    public ScSessionStatus getSessionStatus(Contact contact)
     {
         SessionID sessionID = getSessionID(contact);
         SessionStatus sessionStatus = otrEngine.getSessionStatus(sessionID);
@@ -953,9 +769,9 @@ public class ScOtrEngineImpl
             .getI18NString("plugin.otr.authbuddydialog.HELP_URI"));
     }
 
-    public void refreshSession(OtrContact otrContact)
+    public void refreshSession(Contact contact)
     {
-        SessionID sessionID = getSessionID(otrContact);
+        SessionID sessionID = getSessionID(contact);
         try
         {
             otrEngine.refreshSession(sessionID);
@@ -1004,25 +820,24 @@ public class ScOtrEngineImpl
 
             synchronized(contactsMap)
             {
-                Iterator<OtrContact> i = contactsMap.values().iterator();
+                Iterator<Contact> i = contactsMap.values().iterator();
 
                 while (i.hasNext())
                 {
-                    OtrContact otrContact = i.next();
-                    if (provider.equals(
-                        otrContact.contact.getProtocolProvider()))
+                    Contact contact = i.next();
+                    if (provider.equals(contact.getProtocolProvider()))
                     {
-                        scSessionStatusMap.remove(getSessionID(otrContact));
+                        scSessionStatusMap.remove(getSessionID(contact));
                         i.remove();
                     }
                 }
             }
 
-            Iterator<OtrContact> i = progressDialogMap.keySet().iterator();
+            Iterator<Contact> i = progressDialogMap.keySet().iterator();
 
             while (i.hasNext())
             {
-                if (provider.equals(i.next().contact.getProtocolProvider()))
+                if (provider.equals(i.next().getProtocolProvider()))
                     i.remove();
             }
             scheduler.serviceChanged(ev);
@@ -1031,14 +846,7 @@ public class ScOtrEngineImpl
 
     public void setContactPolicy(Contact contact, OtrPolicy policy)
     {
-        ProtocolProviderService pps = contact.getProtocolProvider();
-        SessionID sessionID
-            = new SessionID(
-                pps.getAccountID().getAccountUniqueID(),
-                contact.getAddress(),
-                pps.getProtocolName());
-
-        String propertyID = sessionID + "contact_policy";
+        String propertyID = getSessionID(contact) + "policy";
         if (policy == null)
             this.configurator.removeProperty(propertyID);
         else
@@ -1051,9 +859,9 @@ public class ScOtrEngineImpl
     public void setGlobalPolicy(OtrPolicy policy)
     {
         if (policy == null)
-            this.configurator.removeProperty("GLOBAL_POLICY");
+            this.configurator.removeProperty("POLICY");
         else
-            this.configurator.setProperty("GLOBAL_POLICY", policy.getPolicy());
+            this.configurator.setProperty("POLICY", policy.getPolicy());
 
         for (ScOtrEngineListener l : getListeners())
             l.globalPolicyChanged();
@@ -1061,31 +869,29 @@ public class ScOtrEngineImpl
 
     public void showError(SessionID sessionID, String err)
     {
-        OtrContact otrContact = getOtrContact(sessionID);
-        if (otrContact == null)
+        Contact contact = getContact(sessionID);
+        if (contact == null)
             return;
 
-        Contact contact = otrContact.contact;
         OtrActivator.uiService.getChat(contact).addMessage(
             contact.getDisplayName(), new Date(),
             Chat.ERROR_MESSAGE, err,
             OperationSetBasicInstantMessaging.DEFAULT_MIME_TYPE);
     }
 
-    public void startSession(OtrContact otrContact)
+    public void startSession(Contact contact)
     {
-        SessionID sessionID = getSessionID(otrContact);
+        SessionID sessionID = getSessionID(contact);
 
-        ScSessionStatus scSessionStatus = getSessionStatus(otrContact);
+        ScSessionStatus scSessionStatus = getSessionStatus(contact);
         scSessionStatus = ScSessionStatus.LOADING;
         scSessionStatusMap.put(sessionID, scSessionStatus);
         for (ScOtrEngineListener l : getListeners())
         {
-            l.sessionStatusChanged(otrContact);
+            l.sessionStatusChanged(contact);
+            scheduler.scheduleScSessionStatusChange(
+                contact, ScSessionStatus.TIMED_OUT);
         }
-
-        scheduler.scheduleScSessionStatusChange(
-            otrContact, ScSessionStatus.TIMED_OUT);
 
         try
         {
@@ -1098,9 +904,9 @@ public class ScOtrEngineImpl
         }
     }
 
-    public String transformReceiving(OtrContact otrContact, String msgText)
+    public String transformReceiving(Contact contact, String msgText)
     {
-        SessionID sessionID = getSessionID(otrContact);
+        SessionID sessionID = getSessionID(contact);
         try
         {
             return otrEngine.transformReceiving(sessionID, msgText);
@@ -1113,9 +919,9 @@ public class ScOtrEngineImpl
         }
     }
 
-    public String transformSending(OtrContact otrContact, String msgText)
+    public String transformSending(Contact contact, String msgText)
     {
-        SessionID sessionID = getSessionID(otrContact);
+        SessionID sessionID = getSessionID(contact);
         try
         {
             return otrEngine.transformSending(sessionID, msgText);
@@ -1128,25 +934,25 @@ public class ScOtrEngineImpl
         }
     }
 
-    private Session getSession(OtrContact contact)
+    private Session getSession(Contact contact)
     {
         SessionID sessionID = getSessionID(contact);
         return otrEngine.getSession(sessionID);
     }
 
     @Override
-    public void initSmp(OtrContact otrContact, String question, String secret)
+    public void initSmp(Contact contact, String question, String secret)
     {
-        Session session = getSession(otrContact);
+        Session session = getSession(contact);
         try
         {
             session.initSmp(question, secret);
 
-            SmpProgressDialog progressDialog = progressDialogMap.get(otrContact);
+            SmpProgressDialog progressDialog = progressDialogMap.get(contact);
             if (progressDialog == null)
             {
-                progressDialog = new SmpProgressDialog(otrContact.contact);
-                progressDialogMap.put(otrContact, progressDialog);
+                progressDialog = new SmpProgressDialog(contact);
+                progressDialogMap.put(contact, progressDialog);
             }
 
             progressDialog.init();
@@ -1155,27 +961,24 @@ public class ScOtrEngineImpl
         catch (OtrException e)
         {
             logger.error("Error initializing SMP session with contact "
-                         + otrContact.contact.getDisplayName(), e);
+                         + contact.getDisplayName(), e);
             showError(session.getSessionID(), e.getMessage());
         }
     }
 
     @Override
-    public void respondSmp( OtrContact otrContact,
-                            InstanceTag receiverTag,
-                            String question,
-                            String secret)
+    public void respondSmp(Contact contact, String question, String secret)
     {
-        Session session = getSession(otrContact);
+        Session session = getSession(contact);
         try
         {
-            session.respondSmp(receiverTag, question, secret);
+            session.respondSmp(question, secret);
 
-            SmpProgressDialog progressDialog = progressDialogMap.get(otrContact);
+            SmpProgressDialog progressDialog = progressDialogMap.get(contact);
             if (progressDialog == null)
             {
-                progressDialog = new SmpProgressDialog(otrContact.contact);
-                progressDialogMap.put(otrContact, progressDialog);
+                progressDialog = new SmpProgressDialog(contact);
+                progressDialogMap.put(contact, progressDialog);
             }
 
             progressDialog.incrementProgress();
@@ -1185,24 +988,24 @@ public class ScOtrEngineImpl
         {
             logger.error(
                 "Error occured when sending SMP response to contact "
-                + otrContact.contact.getDisplayName(), e);
+                + contact.getDisplayName(), e);
             showError(session.getSessionID(), e.getMessage());
         }
     }
 
     @Override
-    public void abortSmp(OtrContact otrContact)
+    public void abortSmp(Contact contact)
     {
-        Session session = getSession(otrContact);
+        Session session = getSession(contact);
         try
         {
             session.abortSmp();
 
-            SmpProgressDialog progressDialog = progressDialogMap.get(otrContact);
+            SmpProgressDialog progressDialog = progressDialogMap.get(contact);
             if (progressDialog == null)
             {
-                progressDialog = new SmpProgressDialog(otrContact.contact);
-                progressDialogMap.put(otrContact, progressDialog);
+                progressDialog = new SmpProgressDialog(contact);
+                progressDialogMap.put(contact, progressDialog);
             }
 
             progressDialog.dispose();
@@ -1210,47 +1013,9 @@ public class ScOtrEngineImpl
         catch (OtrException e)
         {
             logger.error("Error aborting SMP session with contact "
-                         + otrContact.contact.getDisplayName(), e);
+                         + contact.getDisplayName(), e);
             showError(session.getSessionID(), e.getMessage());
         }
-    }
 
-    public PublicKey getRemotePublicKey(OtrContact otrContact)
-    {
-        if (otrContact == null)
-            return null;
-
-        Session session = getSession(otrContact);
-
-        return session.getRemotePublicKey();
-    }
-
-    public List<Session> getSessionInstances(OtrContact otrContact)
-    {
-        if (otrContact == null)
-            return null;
-
-        return getSession(otrContact).getInstances();
-    }
-
-    public boolean setOutgoingSession(OtrContact contact, InstanceTag tag)
-    {
-        if (contact == null)
-            return false;
-
-        Session session = getSession(contact);
-
-        scSessionStatusMap.remove(session.getSessionID());
-        return session.setOutgoingInstance(tag);
-    }
-
-    public Session getOutgoingSession(OtrContact contact)
-    {
-        if (contact == null)
-            return null;
-
-        SessionID sessionID = getSessionID(contact);
-
-        return otrEngine.getOutgoingSession(sessionID);
     }
 }

@@ -7,14 +7,13 @@
 package net.java.sip.communicator.plugin.otr.authdialog;
 
 import java.awt.*;
-import java.security.*;
 
 import javax.swing.*;
 import javax.swing.event.*;
 
 import net.java.sip.communicator.plugin.desktoputil.*;
 import net.java.sip.communicator.plugin.otr.*;
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
+import net.java.sip.communicator.service.protocol.*;
 
 /**
  * @author George Politis
@@ -29,7 +28,7 @@ public class FingerprintAuthenticationPanel
     /**
      * The Contact that we are authenticating.
      */
-    private final OtrContact otrContact;
+    private final Contact contact;
 
     private SIPCommTextField txtRemoteFingerprintComparison;
 
@@ -61,9 +60,9 @@ public class FingerprintAuthenticationPanel
      * 
      * @param contact The contact that this panel refers to.
      */
-    FingerprintAuthenticationPanel(OtrContact contact)
+    FingerprintAuthenticationPanel(Contact contact)
     {
-        this.otrContact = contact;
+        this.contact = contact;
         initComponents();
         loadContact();
         
@@ -108,13 +107,8 @@ public class FingerprintAuthenticationPanel
         cbAction = new JComboBox();
         cbAction.addItem(actionIHave);
         cbAction.addItem(actionIHaveNot);
-
-        PublicKey pubKey = OtrActivator.scOtrEngine.getRemotePublicKey(otrContact);
-        String remoteFingerprint =
-            OtrActivator.scOtrKeyManager.getFingerprintFromPublicKey(pubKey);
         cbAction.setSelectedItem(OtrActivator.scOtrKeyManager
-            .isVerified(otrContact.contact, remoteFingerprint)
-                ? actionIHave : actionIHaveNot);
+            .isVerified(contact) ? actionIHave : actionIHaveNot);
 
         pnlAction.add(cbAction, c);
 
@@ -122,14 +116,10 @@ public class FingerprintAuthenticationPanel
         c.weightx = 1.0;
         pnlAction.add(txtAction, c);
 
-        String resourceName = otrContact.resource != null ?
-            "/" + otrContact.resource.getResourceName() : "";
-
-            txtRemoteFingerprintComparison = new SIPCommTextField(
+        txtRemoteFingerprintComparison = new SIPCommTextField(
             OtrActivator.resourceService
             .getI18NString("plugin.otr.authbuddydialog.FINGERPRINT_CHECK",
-                new String[]
-                    {otrContact.contact.getDisplayName() + resourceName}));
+                new String[]{contact.getDisplayName()}));
         txtRemoteFingerprintComparison.getDocument().addDocumentListener(this);
 
         c.gridwidth = 2;
@@ -146,25 +136,24 @@ public class FingerprintAuthenticationPanel
 
     /**
      * Sets up the {@link OtrBuddyAuthenticationDialog} components so that they
-     * reflect the {@link OtrBuddyAuthenticationDialog#otrContact}
+     * reflect the {@link OtrBuddyAuthenticationDialog#contact}
      */
     private void loadContact()
     {
         // Local fingerprint.
         String account =
-            otrContact.contact.getProtocolProvider().getAccountID().getDisplayName();
+            contact.getProtocolProvider().getAccountID().getDisplayName();
         String localFingerprint =
-            OtrActivator.scOtrKeyManager.getLocalFingerprint(otrContact.contact
+            OtrActivator.scOtrKeyManager.getLocalFingerprint(contact
                 .getProtocolProvider().getAccountID());
         txtLocalFingerprint.setText(OtrActivator.resourceService.getI18NString(
             "plugin.otr.authbuddydialog.LOCAL_FINGERPRINT", new String[]
             { account, localFingerprint }));
 
         // Remote fingerprint.
-        String user = otrContact.contact.getDisplayName();
-        PublicKey pubKey = OtrActivator.scOtrEngine.getRemotePublicKey(otrContact);
+        String user = contact.getDisplayName();
         String remoteFingerprint =
-            OtrActivator.scOtrKeyManager.getFingerprintFromPublicKey(pubKey);
+            OtrActivator.scOtrKeyManager.getRemoteFingerprint(contact);
         txtRemoteFingerprint.setText(OtrActivator.resourceService
             .getI18NString("plugin.otr.authbuddydialog.REMOTE_FINGERPRINT",
                 new String[]
@@ -193,10 +182,6 @@ public class FingerprintAuthenticationPanel
 
     public void compareFingerprints()
     {
-        PublicKey pubKey = OtrActivator.scOtrEngine.getRemotePublicKey(otrContact);
-        String remoteFingerprint =
-            OtrActivator.scOtrKeyManager.getFingerprintFromPublicKey(pubKey);
-
         if(txtRemoteFingerprintComparison.getText() == null
             || txtRemoteFingerprintComparison.getText().length() == 0)
         {
@@ -204,7 +189,8 @@ public class FingerprintAuthenticationPanel
             return;
         }
         if(txtRemoteFingerprintComparison.getText().toLowerCase().contains(
-            remoteFingerprint.toLowerCase()))
+            OtrActivator.scOtrKeyManager
+                .getRemoteFingerprint(contact).toLowerCase()))
         {
             txtRemoteFingerprintComparison.setBackground(Color.green);
             cbAction.setSelectedItem(actionIHave);

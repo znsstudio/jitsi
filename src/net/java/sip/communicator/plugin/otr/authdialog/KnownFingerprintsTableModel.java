@@ -8,12 +8,10 @@ package net.java.sip.communicator.plugin.otr.authdialog;
 
 import java.awt.*;
 import java.util.*;
-import java.util.List;
 
 import javax.swing.table.*;
 
 import net.java.sip.communicator.plugin.otr.*;
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
 import net.java.sip.communicator.service.contactlist.*;
 import net.java.sip.communicator.service.protocol.*;
 
@@ -27,7 +25,6 @@ import org.osgi.framework.*;
  */
 public class KnownFingerprintsTableModel
     extends AbstractTableModel
-    implements ScOtrKeyManagerListener
 {
     /**
      * Serial version UID.
@@ -40,8 +37,7 @@ public class KnownFingerprintsTableModel
 
     public static final int FINGERPRINT_INDEX = 2;
 
-    public final LinkedHashMap<Contact, List<String>> allContactsFingerprints =
-        new LinkedHashMap<Contact, List<String>>();
+    public final java.util.List<Contact> allContacts = new Vector<Contact>();
 
     public KnownFingerprintsTableModel()
     {
@@ -80,15 +76,10 @@ public class KnownFingerprintsTableModel
                 Iterator<Contact> contacts = metaContact.getContacts();
                 while (contacts.hasNext())
                 {
-                    Contact contact = contacts.next();
-                    allContactsFingerprints.put(
-                        contact,
-                        OtrActivator.scOtrKeyManager.getAllRemoteFingerprints(
-                            contact));
+                    allContacts.add(contacts.next());
                 }
             }
         }
-        OtrActivator.scOtrKeyManager.addListener(this);
     }
 
     /**
@@ -121,8 +112,10 @@ public class KnownFingerprintsTableModel
      */
     public Object getValueAt(int row, int column)
     {
-        Contact contact = getContactFromRow(row);
-        String fingerprint = getFingerprintFromRow(row);
+        if (row < 0)
+            return null;
+
+        Contact contact = allContacts.get(row);
         switch (column)
         {
         case CONTACTNAME_INDEX:
@@ -130,72 +123,17 @@ public class KnownFingerprintsTableModel
         case VERIFIED_INDEX:
             // TODO: Maybe use a CheckBoxColumn?
             return (OtrActivator.scOtrKeyManager
-                        .isVerified(contact, fingerprint))
+                        .isVerified(contact))
                 ? OtrActivator.resourceService.getI18NString(
                     "plugin.otr.configform.COLUMN_VALUE_VERIFIED_TRUE")
                 : OtrActivator.resourceService.getI18NString(
                     "plugin.otr.configform.COLUMN_VALUE_VERIFIED_FALSE");
         case FINGERPRINT_INDEX:
-            return fingerprint;
+            return OtrActivator.scOtrKeyManager
+                    .getRemoteFingerprint(contact);
         default:
             return null;
         }
-    }
-
-    Contact getContactFromRow(int row)
-    {
-        if (row < 0 || row >= getRowCount())
-            return null;
-
-        int index = -1;
-        Contact contact = null;
-        for (Map.Entry<Contact, List<String>> entry :
-                allContactsFingerprints.entrySet())
-        {
-            boolean found = false;
-            contact = entry.getKey();
-            List<String> fingerprints = entry.getValue();
-            for (String f : fingerprints)
-            {
-                index++;
-                if (index == row)
-                {
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        return contact;
-    }
-
-    String getFingerprintFromRow(int row)
-    {
-        if (row < 0 || row >= getRowCount())
-            return null;
-
-        int index = -1;
-        String fingerprint = null;
-        for (Map.Entry<Contact, List<String>> entry :
-                allContactsFingerprints.entrySet())
-        {
-            boolean found = false;
-            List<String> fingerprints = entry.getValue();
-            for (String f : fingerprints)
-            {
-                index++;
-                fingerprint = f;
-                if (index == row)
-                {
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-    return fingerprint;
     }
 
     /**
@@ -203,11 +141,7 @@ public class KnownFingerprintsTableModel
      */
     public int getRowCount()
     {
-        int rowCount = 0;
-        for (Map.Entry<Contact, List<String>> entry :
-                allContactsFingerprints.entrySet())
-            rowCount += entry.getValue().size();
-        return rowCount;
+        return allContacts.size();
     }
 
     /**
@@ -216,15 +150,5 @@ public class KnownFingerprintsTableModel
     public int getColumnCount()
     {
         return 3;
-    }
-
-    @Override
-    public void contactVerificationStatusChanged(OtrContact otrContact)
-    {
-        Contact contact = otrContact.contact;
-        allContactsFingerprints.put(
-            contact,
-            OtrActivator.scOtrKeyManager.getAllRemoteFingerprints(contact));
-        this.fireTableDataChanged();
     }
 }

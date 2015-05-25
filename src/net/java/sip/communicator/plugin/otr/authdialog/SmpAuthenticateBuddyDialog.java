@@ -11,10 +11,9 @@ import java.awt.event.*;
 
 import javax.swing.*;
 
-import net.java.otr4j.session.*;
 import net.java.sip.communicator.plugin.desktoputil.*;
 import net.java.sip.communicator.plugin.otr.*;
-import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
+import net.java.sip.communicator.service.protocol.*;
 
 /**
  * The dialog that pops up when the remote party send us SMP
@@ -27,17 +26,13 @@ import net.java.sip.communicator.plugin.otr.OtrContactManager.OtrContact;
 public class SmpAuthenticateBuddyDialog
     extends SIPCommDialog
 {
-    private final OtrContact otrContact;
+    private final Contact contact;
 
     private final String question;
 
-    private final InstanceTag receiverTag;
-
-    public SmpAuthenticateBuddyDialog(
-        OtrContact contact, InstanceTag receiverTag, String question)
+    public SmpAuthenticateBuddyDialog(Contact contact, String question)
     {
-        this.otrContact = contact;
-        this.receiverTag = receiverTag;
+        this.contact = contact;
         this.question = question;
         initComponents();
     }
@@ -65,17 +60,12 @@ public class SmpAuthenticateBuddyDialog
                 , Font.BOLD
                 , 14);
         authenticationFrom.setFont(newFont);
-
-        String resourceName = otrContact.resource != null ?
-            "/" + otrContact.resource.getResourceName() : "";
         String authFromText =
             String.format(
                 OtrActivator.resourceService
                     .getI18NString(
                         "plugin.otr.authbuddydialog.AUTHENTICATION_FROM",
-                        new String[]
-                            {otrContact.contact.getDisplayName() +
-                            resourceName}));
+                        new String[] {contact.getDisplayName()}));
         authenticationFrom.setText(authFromText);
         mainPanel.add(authenticationFrom);
 
@@ -180,7 +170,7 @@ public class SmpAuthenticateBuddyDialog
         {
             public void actionPerformed(ActionEvent e)
             {
-                OtrActivator.scOtrEngine.abortSmp(otrContact);
+                OtrActivator.scOtrEngine.abortSmp(contact);
                 SmpAuthenticateBuddyDialog.this.dispose();
             }
         });
@@ -198,7 +188,7 @@ public class SmpAuthenticateBuddyDialog
             public void actionPerformed(ActionEvent e)
             {
                 OtrActivator.scOtrEngine.respondSmp(
-                    otrContact, receiverTag, question, answerTextBox.getText());
+                    contact, question, answerTextBox.getText());
                 SmpAuthenticateBuddyDialog.this.dispose();
             }
         });

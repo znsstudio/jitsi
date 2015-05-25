@@ -4,7 +4,7 @@
  * Distributable under LGPL license.
  * See terms of license at gnu.org.
  */
-package net.java.sip.communicator.plugin.otr.authdialog;
+package net.java.sip.communicator.plugin.otr;
 
 import java.awt.*;
 import java.awt.event.*;
@@ -14,9 +14,9 @@ import javax.swing.*;
 import javax.swing.border.*;
 
 import net.java.otr4j.*;
-import net.java.sip.communicator.plugin.desktoputil.*;
-import net.java.sip.communicator.plugin.otr.*;
 import net.java.sip.communicator.service.protocol.*;
+import net.java.sip.communicator.plugin.desktoputil.*;
+import net.java.sip.communicator.plugin.otr.authdialog.*;
 
 /**
  * A special {@link Panel} that manages the OTR configuration.
@@ -249,7 +249,12 @@ public class OtrConfigurationPanel
             cbAutoInitiate.setEnabled(otrEnabled);
             cbRequireOtr.setEnabled(otrEnabled);
 
+            String autoInitPropValue
+                = OtrActivator.configService.getString(
+                    OtrActivator.AUTO_INIT_OTR_PROP);
             boolean isAutoInit = otrPolicy.getEnableAlways();
+            if (autoInitPropValue != null)
+                isAutoInit = Boolean.parseBoolean(autoInitPropValue);
 
             cbAutoInitiate.setSelected(isAutoInit);
 
@@ -317,7 +322,10 @@ public class OtrConfigurationPanel
                     boolean isAutoInit
                         = ((JCheckBox) e.getSource()).isSelected();
 
-                    otrPolicy.setSendWhitespaceTag(isAutoInit);
+                    otrPolicy.setEnableAlways(isAutoInit);
+                    OtrActivator.configService.setProperty(
+                        OtrActivator.AUTO_INIT_OTR_PROP,
+                        Boolean.toString(isAutoInit));
 
                     OtrActivator.scOtrEngine.setGlobalPolicy(otrPolicy);
 

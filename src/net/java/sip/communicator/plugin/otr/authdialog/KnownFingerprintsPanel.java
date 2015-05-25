@@ -13,9 +13,9 @@ import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
 
+import net.java.sip.communicator.service.protocol.*;
 import net.java.sip.communicator.plugin.desktoputil.*;
 import net.java.sip.communicator.plugin.otr.*;
-import net.java.sip.communicator.service.protocol.*;
 
 /**
  * @author @George Politis
@@ -44,7 +44,7 @@ public class KnownFingerprintsPanel
 
         this.setPreferredSize(new Dimension(400, 200));
 
-        openContact(getSelectedContact(), getSelectedFingerprint());
+        openContact(getSelectedContact());
     }
 
     /**
@@ -74,7 +74,7 @@ public class KnownFingerprintsPanel
                     if (e.getValueIsAdjusting())
                         return;
 
-                    openContact(getSelectedContact(), getSelectedFingerprint());
+                    openContact(getSelectedContact());
 
                 }
             });
@@ -88,16 +88,14 @@ public class KnownFingerprintsPanel
         btnVerifyFingerprint = new JButton();
         btnVerifyFingerprint.setText(OtrActivator.resourceService
             .getI18NString("plugin.otr.configform.VERIFY_FINGERPRINT"));
-        btnVerifyFingerprint.setEnabled(false);
 
         btnVerifyFingerprint.addActionListener(new ActionListener()
         {
             public void actionPerformed(ActionEvent arg0)
             {
                 OtrActivator.scOtrKeyManager
-                    .verify(OtrContactManager.getOtrContact(
-                        getSelectedContact(), null), getSelectedFingerprint());
-                openContact(getSelectedContact(), getSelectedFingerprint());
+                    .verify(getSelectedContact());
+                openContact(getSelectedContact());
                 contactsTable.updateUI();
             }
         });
@@ -107,16 +105,13 @@ public class KnownFingerprintsPanel
         btnForgetFingerprint = new JButton();
         btnForgetFingerprint.setText(OtrActivator.resourceService
             .getI18NString("plugin.otr.configform.FORGET_FINGERPRINT"));
-        btnForgetFingerprint.setEnabled(false);
-
         btnForgetFingerprint.addActionListener(new ActionListener()
         {
             public void actionPerformed(ActionEvent arg0)
             {
                 OtrActivator.scOtrKeyManager
-                    .unverify(OtrContactManager.getOtrContact(
-                        getSelectedContact(), null), getSelectedFingerprint());
-                openContact(getSelectedContact(), getSelectedFingerprint());
+                    .unverify(getSelectedContact());
+                openContact(getSelectedContact());
                 contactsTable.updateUI();
             }
         });
@@ -134,27 +129,10 @@ public class KnownFingerprintsPanel
         KnownFingerprintsTableModel model =
             (KnownFingerprintsTableModel) contactsTable.getModel();
         int index = contactsTable.getSelectedRow();
-        if (index < 0 || index > model.getRowCount())
+        if (index < 0 || index > model.allContacts.size())
             return null;
 
-        return model.getContactFromRow(index);
-    }
-
-    /**
-     * Gets the selected fingerprint for this
-     * {@link KnownFingerprintsTableModel}
-     * 
-     * return the selected fingerprint
-     */
-    private String getSelectedFingerprint()
-    {
-        KnownFingerprintsTableModel model =
-            (KnownFingerprintsTableModel) contactsTable.getModel();
-        int index = contactsTable.getSelectedRow();
-        if (index < 0 || index > model.getRowCount())
-            return null;
-
-        return model.getFingerprintFromRow(index);
+        return model.allContacts.get(index);
     }
 
     /**
@@ -162,11 +140,11 @@ public class KnownFingerprintsPanel
      * reflect the {@link Contact} param.
      *
      * @param contact the {@link Contact} to setup the components for.
-     * @param fingerprint the fingerprint to setup the components for.
      */
-    private void openContact(Contact contact, String fingerprint)
+    private void openContact(Contact contact)
     {
-        if (contact == null || fingerprint == null)
+        if (contact == null
+          || OtrActivator.scOtrKeyManager.getRemoteFingerprint(contact) == null)
         {
             btnForgetFingerprint.setEnabled(false);
             btnVerifyFingerprint.setEnabled(false);
@@ -175,7 +153,7 @@ public class KnownFingerprintsPanel
         {
             boolean verified
                 = OtrActivator.scOtrKeyManager
-                    .isVerified(contact, fingerprint);
+                    .isVerified(contact);
 
             btnForgetFingerprint.setEnabled(verified);
             btnVerifyFingerprint.setEnabled(!verified);
