@@ -30,7 +30,7 @@ import org.jivesoftware.smack.packet.*;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.util.*;
 import org.jivesoftware.smackx.*;
-import org.jivesoftware.smackx.packet.*;
+
 
 /**
  * Maps SIP Communicator typing notifications to those going and coming from

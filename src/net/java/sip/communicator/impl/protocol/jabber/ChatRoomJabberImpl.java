@@ -34,7 +34,7 @@ import org.jivesoftware.smack.packet.*;
 import org.jivesoftware.smack.util.StringUtils;
 import org.jivesoftware.smackx.*;
 import org.jivesoftware.smackx.muc.*;
-import org.jivesoftware.smackx.packet.*;
+
 
 /**
  * Implements chat rooms for jabber. The class encapsulates instances of the

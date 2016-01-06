@@ -24,7 +24,7 @@ import org.jitsi.util.Logger;
 import org.jivesoftware.smack.packet.*;
 import org.jivesoftware.smack.provider.*;
 import org.jivesoftware.smack.util.*;
-import org.jivesoftware.smackx.packet.*;
+
 import org.jivesoftware.smackx.packet.StreamInitiation.File;
 import org.jivesoftware.smackx.provider.*;
 import org.xmlpull.v1.*;

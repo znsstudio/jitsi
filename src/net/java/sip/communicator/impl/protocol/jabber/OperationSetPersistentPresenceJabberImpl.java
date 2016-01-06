@@ -27,8 +27,13 @@ import net.java.sip.communicator.util.*;
 import org.jivesoftware.smack.*;
 import org.jivesoftware.smack.filter.*;
 import org.jivesoftware.smack.packet.*;
+import org.jivesoftware.smack.roster.*;
+import org.jivesoftware.smack.roster.packet.*;
 import org.jivesoftware.smack.util.*;
-import org.jivesoftware.smackx.packet.*;
+import org.jxmpp.jid.Jid;
+import org.jxmpp.jid.impl.*;
+import org.jxmpp.stringprep.*;
+import org.jxmpp.util.*;
 
 /**
  * The Jabber implementation of a Persistent Presence Operation set. This class
@@ -269,7 +274,7 @@ public class OperationSetPersistentPresenceJabberImpl
         ContactJabberImpl sourceContact;
         if(notInContactListGroup != null
             && (sourceContact = notInContactListGroup.findContact(
-                                    StringUtils.parseBareAddress(id)))
+                XmppStringUtils.parseBareJid(id)))
                 != null)
             return sourceContact;
         else
@@ -277,7 +282,7 @@ public class OperationSetPersistentPresenceJabberImpl
             sourceContact = ssContactList.createVolatileContact(
                 id, isPrivateMessagingContact, displayName);
             if(isPrivateMessagingContact
-                && StringUtils.parseResource(id) != null)
+                && XmppStringUtils.parseResource(id) != null)
             {
                 updateResources(sourceContact, false);
             }
@@ -416,24 +421,24 @@ public class OperationSetPersistentPresenceJabberImpl
         {
             Presence p = presenceIterator.next();
 
-            String fullJid = p.getFrom();
-            rs.put(fullJid, createResource(p, p.getFrom(), localContact));
+            String fullJid = p.getFrom().toString();
+            rs.put(fullJid, createResource(p, fullJid, localContact));
         }
 
         // adds xmpp listener for changes in the local contact resources
-        PacketFilter presenceFilter = new PacketTypeFilter(Presence.class);
+        StanzaTypeFilter presenceFilter = new StanzaTypeFilter(Presence.class);
         parentProvider.getConnection()
-            .addPacketListener(
-                new PacketListener()
+            .addAsyncStanzaListener(
+                new StanzaListener()
                 {
                     @Override
-                    public void processPacket(Packet packet)
+                    public void processPacket(Stanza packet)
                     {
                         Presence presence = (Presence) packet;
-                        String from = presence.getFrom();
+                        Jid from = presence.getFrom();
 
                         if(from == null
-                            || !StringUtils.parseBareAddress(from).equals(id))
+                            || !from.asBareJid().toString().equals(id))
                             return;
 
                         // own resource update, let's process it
@@ -456,7 +461,7 @@ public class OperationSetPersistentPresenceJabberImpl
         String fullJid,
         Contact contact)
     {
-        String resource = StringUtils.parseResource(fullJid);
+        String resource = XmppStringUtils.parseResource(fullJid);
 
         return new ContactResourceJabberImpl(
             fullJid,
@@ -638,11 +643,21 @@ public class OperationSetPersistentPresenceJabberImpl
                 presence.setStatus(statusMessage);
             //presence.addExtension(new Version());
 
-            parentProvider.getConnection().sendPacket(presence);
+            try
+            {
+                parentProvider.getConnection().sendStanza(presence);
 
-            if(localContact != null)
-                updateResource(localContact,
-                    parentProvider.getOurJID(), presence);
+                if(localContact != null)
+                    updateResource(localContact,
+                        parentProvider.getOurJID(), presence);
+            }
+            catch (SmackException.NotConnectedException
+                    | InterruptedException e)
+            {
+                logger.error("Error sending presence", e);
+
+                return;
+            }
         }
 
         fireProviderStatusChangeEvent(currentStatus, status);
@@ -701,8 +716,16 @@ public class OperationSetPersistentPresenceJabberImpl
                             + " query the status of a contact in its roster");
         }
 
-        Presence presence
-            = xmppConnection.getRoster().getPresence(contactIdentifier);
+        Presence presence = null;
+        try
+        {
+            presence = Roster.getInstanceFor(xmppConnection)
+                .getPresence(JidCreate.bareFrom(contactIdentifier));
+        }
+        catch (XmppStringprepException e)
+        {
+            logger.error("Error creating barejid:" + contactIdentifier, e);
+        }
 
         if(presence != null)
             return jabberStatusToPresenceStatus(presence, parentProvider);
@@ -992,31 +1015,31 @@ public class OperationSetPersistentPresenceJabberImpl
                 //offline. The protocol does not implement top level buddies
                 //nor subgroups for top level groups so a simple nested loop
                 //would be enough.
-                Iterator<ContactGroup> groupsIter =
-                    getServerStoredContactListRoot().subgroups();
+                Iterator<ContactGroupJabberImpl> groupsIter =
+                    ((ContactGroupJabberImpl)getServerStoredContactListRoot())
+                        .subgroups();
                 while(groupsIter.hasNext())
                 {
-                    ContactGroup group = groupsIter.next();
+                    ContactGroupJabberImpl group = groupsIter.next();
 
-                    Iterator<Contact> contactsIter = group.contacts();
+                    Iterator<ContactJabberImpl> contactsIter = group.contacts();
 
                     while(contactsIter.hasNext())
                     {
-                        ContactJabberImpl contact
-                            = (ContactJabberImpl)contactsIter.next();
+                        ContactJabberImpl contact = contactsIter.next();
 
                         updateContactStatus(contact, offlineStatus);
                     }
                 }
 
                 //do the same for all contacts in the root group
-                Iterator<Contact> contactsIter
-                    = getServerStoredContactListRoot().contacts();
+                Iterator<ContactJabberImpl> contactsIter
+                    = ((ContactGroupJabberImpl)getServerStoredContactListRoot())
+                        .contacts();
 
                 while (contactsIter.hasNext())
                 {
-                    ContactJabberImpl contact
-                        = (ContactJabberImpl) contactsIter.next();
+                    ContactJabberImpl contact = contactsIter.next();
 
                     updateContactStatus(contact, offlineStatus);
                 }
@@ -1044,8 +1067,18 @@ public class OperationSetPersistentPresenceJabberImpl
                 "Argument is not an jabber contact (contact=" + contact + ")");
 
         RosterEntry entry = ((ContactJabberImpl)contact).getSourceEntry();
-        if(entry != null)
-            entry.setName(newName);
+        try
+        {
+            if(entry != null)
+                entry.setName(newName);
+        }
+        catch (SmackException.NotConnectedException
+                | SmackException.NoResponseException
+                | XMPPException.XMPPErrorException
+                | InterruptedException e)
+        {
+            logger.error("Error setting name", e);
+        }
     }
 
     /**
@@ -1078,9 +1111,9 @@ public class OperationSetPersistentPresenceJabberImpl
                 // one used in the Roster itself, but later we
                 // will wait for it to be ready
                 // (inside method XMPPConnection.getRoster())
-                parentProvider.getConnection().addPacketListener(
+                parentProvider.getConnection().addSyncStanzaListener(
                     new ServerStoredListInit(),
-                    new PacketTypeFilter(RosterPacket.class)
+                    new StanzaTypeFilter(RosterPacket.class)
                 );
 
                 // will be used to store presence events till roster is
@@ -1095,9 +1128,9 @@ public class OperationSetPersistentPresenceJabberImpl
                         new JabberSubscriptionListener();
                     parentProvider
                         .getConnection()
-                            .addPacketListener(
+                            .addSyncStanzaListener(
                                 subscribtionPacketListener,
-                                new PacketTypeFilter(Presence.class));
+                                new StanzaTypeFilter(Presence.class));
                 }
             }
             else if(evt.getNewState() == RegistrationState.REGISTERED)
@@ -1127,10 +1160,11 @@ public class OperationSetPersistentPresenceJabberImpl
                 XMPPConnection connection = parentProvider.getConnection();
                 if(connection != null)
                 {
-                    connection.removePacketListener(subscribtionPacketListener);
+                    connection.removeAsyncStanzaListener(
+                        subscribtionPacketListener);
 
                     // the roster is guaranteed to be non-null
-                    connection.getRoster()
+                    Roster.getInstanceFor(connection)
                         .removeRosterListener(contactChangesListener);
                 }
 
@@ -1186,8 +1220,8 @@ public class OperationSetPersistentPresenceJabberImpl
         }
 
         Iterator<Presence> it =
-            parentProvider.getConnection().getRoster()
-                .getPresences(contact.getAddress());
+            Roster.getInstanceFor(parentProvider.getConnection())
+                .getPresences(contact.getJid()).iterator();
 
         // Choose the resource which has the highest priority AND supports
         // Jingle, if we have two resources with same priority take
@@ -1207,7 +1241,7 @@ public class OperationSetPersistentPresenceJabberImpl
         {
             String fullJid = resourceIter.next();
 
-            if(!parentProvider.getConnection().getRoster()
+            if(!Roster.getInstanceFor(parentProvider.getConnection())
                     .getPresenceResource(fullJid).isAvailable())
             {
                 eventFired = removeResource(contact, fullJid) || eventFired;
@@ -1395,27 +1429,27 @@ public class OperationSetPersistentPresenceJabberImpl
          * Not used here.
          * @param addresses list of addresses added
          */
-        public void entriesAdded(Collection<String> addresses)
+        public void entriesAdded(Collection<Jid> addresses)
         {}
 
         /**
          * Not used here.
          * @param addresses list of addresses updated
          */
-        public void entriesUpdated(Collection<String> addresses)
+        public void entriesUpdated(Collection<Jid> addresses)
         {}
 
         /**
          * Not used here.
          * @param addresses list of addresses deleted
          */
-        public void entriesDeleted(Collection<String> addresses)
+        public void entriesDeleted(Collection<Jid> addresses)
         {}
 
         /**
          * Not used here.
          */
-        public void rosterError(XMPPError error, Packet packet)
+        public void rosterError(XMPPError error, Stanza packet)
         {}
 
         /**
